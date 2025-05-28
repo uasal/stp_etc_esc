@@ -14,7 +14,7 @@ import config_stp
 import config_stp_esc
 import config_um
 
-from etc_esc import ExposureTimeSNRCalculatorESC as etsc
+from stp_etc_esc import ExposureTimeSNRCalculatorESC as etsc
 
 @pytest.fixture
 def UM():
