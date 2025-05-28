@@ -1,4 +1,4 @@
-# stp-etc-esc
+# stp_etc_esc
 This is intended to be the active directory for the public release of the exposure time calculator for the ExtraSolar Camera.
 
 ## Configuration Management
