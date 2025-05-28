@@ -51,7 +51,7 @@ def test_module_installations():
 
 
 @pytest.mark.parametrize("telescope", ["UM", "STP"], indirect=True)
-def test_configs_telescope(telescope: Literal['UM'] | Literal['STP']):
+def test_configs_telescope(telescope):
 	if telescope == "STP":
 		data_telescope = config_stp.load_config_values("parsed")
 	if telescope == "UM":
@@ -77,7 +77,7 @@ def test_configs_instrument():
 
 
 @pytest.mark.parametrize("telescope", ["UM", "STP"], indirect=True)
-def test_default_throughput(telescope: Literal['UM'] | Literal['STP']):
+def test_default_throughput(telescope):
 	obs = etsc.Observatory(telescope,2.4*u.m,36.45*u.m)
 	obs.make_STP()
 	flux = obs.bandpass(obs.bandpass.waveset)
@@ -105,7 +105,7 @@ def test_sensor_initialization(telescope: Literal['UM'] | Literal['STP']):
 	return
 
 @pytest.mark.parametrize("telescope", ["UM", "STP"], indirect=True)
-def test_counts(telescope: Literal['UM'] | Literal['STP']):
+def test_counts(telescope):
 	if telescope == "STP":
 		data_telescope = config_stp.load_config_values("parsed")
 		data_path_telescope = config_stp.get_data_path()
@@ -139,7 +139,7 @@ def test_counts(telescope: Literal['UM'] | Literal['STP']):
 
 
 @pytest.mark.parametrize("telescope", ["UM", "STP"], indirect=True)
-def test_validate_ETC_snr_calculation(telescope: Literal['UM'] | Literal['STP']):
+def test_validate_ETC_snr_calculation(telescope):
 	if telescope == "STP":
 		data_telescope = config_stp.load_config_values("parsed")
 		data_path_telescope = config_stp.get_data_path()
