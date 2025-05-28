@@ -35,8 +35,7 @@ stp_etc_esc.__version__
 
 ## Usage
 
-Included in this repository is an [example notebook] of how an analysis would make use of the ESC exposure time calculator.
-What is included in this readme is only a brief summary.
+Included in this repository is an [example notebook](https://github.com/uasal/stp_etc_esc/blob/develop/notebooks/ESC_ExposureTimeSNRCalculator_Demo.ipynb) of how to use the exposure time calculator assuming the default configurations. There is also an [executable python script](https://github.com/uasal/stp_etc_esc/blob/develop/notebooks/etc_esc_requirements.py) that will run the exposure time calculator assuming the default configurations and generate figures calculating SNR and noise sources for various individual frame exposure times.
 
 
 
