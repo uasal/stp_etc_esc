@@ -25,5 +25,5 @@ def test_astropy_units():
     and then return either [] for no errors (passing assert), or a list containing information on each violation
     """
     # CHANGE the path 'config_project_template' to your tool / repo name
-    errors = config_project_template.load_config_values("parsed", return_loader=True).validate_astropy()
+    errors = config_stp.load_config_values("parsed", return_loader=True).validate_astropy()
     assert errors == True, "Invalid astropy units found:\n" + "\n".join(errors)
