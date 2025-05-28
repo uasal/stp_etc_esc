@@ -37,7 +37,7 @@ def test_module_installations():
 	assert config_stp_esc_spec is not None, "config_stp_esc is not installed"
 	
 	try:
-	    config_stp_spec = importlib.util.finds_spec("config_stp")
+	    config_stp_spec = importlib.util.find_spec("config_stp")
 	except Exception as e:
 		pytest.fail(f"Failed to load module: {e}")
 	assert config_stp_spec is not None, "config_stp is not installed"
