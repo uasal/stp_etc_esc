@@ -91,7 +91,7 @@ def test_default_throughput(telescope):
 
 
 @pytest.mark.parametrize("telescope", ["UM", "STP"], indirect=True)
-def test_sensor_initialization(telescope: Literal['UM'] | Literal['STP']):
+def test_sensor_initialization(telescope):
 	obs = etsc.Observatory(telescope,2.4*u.m,36.45*u.m)
 	obs.make_STP()
 	if telescope == "UM":
