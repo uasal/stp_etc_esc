@@ -1,5 +1,5 @@
-# config_project_template
-This is a template of a configuration repository that is used with a specific simulation tool (or group of tools).
+# stp-etc-esc
+This is intended to be the active directory for the public release of the exposure time calculator for the ExtraSolar Camera.
 
 ## Configuration Management
 Refer to the [UASAL Configuration Management Summary](https://github.com/uasal/lab_documents/blob/main/computing/development_guide/configuration_management.md) for additionally details on how analysis, simulation tools, and configuration repositories are structured within the UASAL GitHub organization.
