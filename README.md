@@ -1,56 +1,41 @@
-# config_project_template
-This is a template of a configuration repository that is used with a specific simulation tool (or group of tools).
+# stp_etc_esc
+This is intended to be the active directory for the public release of the exposure time calculator for the ExtraSolar Camera.
 
-## Configuration Management
-Refer to the [UASAL Configuration Management Summary](https://github.com/uasal/lab_documents/blob/main/computing/development_guide/configuration_management.md) for additionally details on how analysis, simulation tools, and configuration repositories are structured within the UASAL GitHub organization.
+Derived from the exposure time calculator developed by Aaron Goldtooth, with updates from Justin Hom
 
-For Configuration FAQ's, also defer to the [UASAL Configuration Management Summary](https://github.com/uasal/lab_documents/blob/main/computing/development_guide/configuration_management.md) for more information.
+Additional Contributions from Sanchit Sabhlok and Jess Johnson.
+
+## Requirements
+The package requires a few configuration repositories to be set up and installed in your python environment.
+1. [config_um](https://github.com/uasal/config_um) - The configuration repo for Ultramarine 3 m telescope.
+2. [config_stp](https://github.com/uasal/config_stp) - The configuration repo for the Space Telescope Project.
+3. [config_stp_esc](https://github.com/uasal/config_stp_esc) - Configuration repo for the ESC instrument.
+
+All important properties related to the instrument including mirrors, optics, coating throughput, filters, and detectors, are stored in these repositories. Note that the exposure time calculator also allows for users to input their own configurations, but this feature can only be used if the configuration(s) follow the same organizational structure as defined in these configuration repositories. Users can also use the class functions built into the backend to create their own instruments for calculating exposure times.
+
+The installation instructions for these packages can be found on their corresponding github repos. 
 
 ## Dependencies
-All UASAL config packages are dependent on [utils_config](https://github.com/uasal/utils_config) but will be automatically installed when installing this package.
+All UASAL config packages are dependent on [utils_config](https://github.com/uasal/utils_config) but will be automatically installed when installing the configuration repositories.
+
+Additional package dependencies required for the ETC - astropy, numpy, matplotlib, scipy and synphot.
 
 ## Installation
-ssh keys are required for the pip-based install. Verify you have ssh keys installed in GitHub, or check out this [ssh key tutorial](https://github.com/uasal/lab_documents/blob/main/ssh_key_tutorial.md)
-
-If there is no intention of modifying any of the configuration files inside the repository and analyzing the results, you can simply pip install the package.
-
-In the event that you wish to interact with the files in the package, which may be the case if proposing a change to the files via a Pull request, then it may be useful to install it as an editable package by adding a `-e` to the commands below.
-
-### Pip-based install
-
-
-```sh
-pip install git+ssh://git@github.com/uasal/config_project_template.git
+The Exposure Time Calculator is a python package that can be installed via a download from github and then installing on your system locally. You can directly clone the [ETC github repo](https://github.com/uasal/stp_etc_esc) or fork the repo and clone the fork. 
 ```
-
-### Installed via cloning
-```sh
-git clone git@github.com:uasal/config_project_template.git
-cd config_project_template
-pip install .
+$ git clone git@github.com:uasal/stp_etc_esc.git
+$ cd stp_etc_esc
+$ pip install .
+```
+The ETC should now be installed on your local machine. To confirm installation, the following import on python should work - 
+```
+import stp_etc_esc
+stp_etc_esc.__version__
 ```
 
 ## Usage
 
-Included in this repository is an [example notebook] of how an analysis would make use of this (and other) configuration repositories.
-What is included in this readme is only a brief summary.
+Included in this repository is an [example notebook](https://github.com/uasal/stp_etc_esc/blob/develop/notebooks/ESC_ExposureTimeSNRCalculator_Demo.ipynb) of how to use the exposure time calculator assuming the default configurations. There is also an [executable python script](https://github.com/uasal/stp_etc_esc/blob/develop/notebooks/etc_esc_requirements.py) that will run the exposure time calculator assuming the default configurations and generate figures calculating SNR and noise sources for various individual frame exposure times.
 
-config_stp makes usage of the ConfigLoader class (as *config_loader*) from utils_config via the `load_config_values` method, which accepts 'raw' 'parsed' or 'unitless' as an argument, returning a dictionary after parsing the 'configs' directory for .toml filies
-```python
-import config_project_template
-data = config_project_template.load_config_values()
-print(data["observatory"]["pointing"]["jitter_rms"])
-```
 
-load_config_values() has a default argument of 'raw' or alternatively pass in one of the three viable arguments for how values should be presented: 
-- `load_config_values('unitless')` -> 0.01
-- `load_config_values('parsed')` -> {'value': 0.01, 'unit': 'arcsecond'}
-- `load_config_values('raw')` -> 10e-3arcsecond
-
-For importing data and keeping code consistent across installs, config_stp will return the path to support_data with `get_data_path()`
-```python
-import config_project_template
-data_path = config_project_template.get_data_path()
-print(data_path)
-```
 
