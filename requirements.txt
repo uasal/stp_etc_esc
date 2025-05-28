@@ -5,3 +5,7 @@ utils_config @ git+https://github.com/uasal/utils_config.git@develop
 config_stp @ git+https://github.com/uasal/config_stp.git
 config_stp_esc @ git+https://github.com/uasal/config_stp_esc.git
 config_um @ git+https://github.com/uasal/config_um.git
+matplotlib
+astropy
+numpy
+synphot
