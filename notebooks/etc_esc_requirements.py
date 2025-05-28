@@ -1,7 +1,6 @@
 import config_stp
 import config_stp_esc
-#import ExposureTimeSNRCalculatorESC as etsc
-from etc_esc import ExposureTimeSNRCalculatorESC as etsc
+from stp_etc_esc import ExposureTimeSNRCalculatorESC as etsc
 from astropy import units as u
 from pathlib import Path
 import numpy as np
