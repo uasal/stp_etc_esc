@@ -14,7 +14,7 @@ import config_stp
 import config_stp_esc
 import config_um
 
-from etc_esc import ExposureTimeSNRCalculatorESC as etsc
+from stp_etc_esc import ExposureTimeSNRCalculatorESC as etsc
 
 @pytest.fixture
 def UM():
@@ -25,19 +25,30 @@ def STP():
 	return "STP"
 
 @pytest.fixture
-def telescope(request):
+def telescope(request: pytest.FixtureRequest):
 	return request.getfixturevalue(request.param)
 
 
 def test_module_installations():
-	config_stp_spec = importlib.util.find_spec("config_stp")
-	config_um_spec = importlib.util.find_spec("config_um")
-	config_stp_esc_spec = importlib.util.find_spec("config_stp_esc")
-	assert config_stp_spec is not None, "config_stp is not installed"
-	assert config_um_spec is not None, "config_um is not installed"
+	try:
+	    config_stp_esc_spec = importlib.util.find_spec("config_stp_esc")
+	except Exception as e:
+		pytest.fail(f"Failed to load module: {e}")
 	assert config_stp_esc_spec is not None, "config_stp_esc is not installed"
+	
+	try:
+	    config_stp_spec = importlib.util.find_spec("config_stp")
+	except Exception as e:
+		pytest.fail(f"Failed to load module: {e}")
+	assert config_stp_spec is not None, "config_stp is not installed"
+	
+	try:
+		config_um_spec = importlib.util.find_spec("config_um")
+	except Exception as e:
+		pytest.fail(f"Failed to load module: {e}")
+	assert config_um_spec is not None, "config_um is not installed"
 
-	return
+
 
 @pytest.mark.parametrize("telescope", ["UM", "STP"], indirect=True)
 def test_configs_telescope(telescope):
