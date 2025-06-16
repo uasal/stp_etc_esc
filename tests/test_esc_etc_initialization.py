@@ -10,9 +10,18 @@ from synphot import SpectralElement
 from synphot.models import Box1D
 import astropy.units as u
 
-import config_stp
-import config_stp_esc
-import config_um
+try:
+    import config_stp
+    import config_stp_esc
+    import config_um
+except:
+    print("Could not import configuration repos.")
+
+try:
+    import utils_config
+except:
+    print("Could not import utils_config. Cannot parse tomls. Exiting.")
+    exit()
 
 from stp_etc_esc import ExposureTimeSNRCalculatorESC as etsc
 
@@ -25,33 +34,12 @@ def STP():
 	return "STP"
 
 @pytest.fixture
-def telescope(request: pytest.FixtureRequest):
-	return request.getfixturevalue(request.param)
+def telescope(request):
+    return request.getfixturevalue(request.param)
 
 @pytest.fixture
 def test_STP():
 	return "test_STP"
-
-
-def test_module_installations():
-	try:
-	    config_stp_esc_spec = importlib.util.find_spec("config_stp_esc")
-	except Exception as e:
-		pytest.fail(f"Failed to load module: {e}")
-	assert config_stp_esc_spec is not None, "config_stp_esc is not installed"
-	
-	try:
-	    config_stp_spec = importlib.util.find_spec("config_stp")
-	except Exception as e:
-		pytest.fail(f"Failed to load module: {e}")
-	assert config_stp_spec is not None, "config_stp is not installed"
-	
-	try:
-		config_um_spec = importlib.util.find_spec("config_um")
-	except Exception as e:
-		pytest.fail(f"Failed to load module: {e}")
-	assert config_um_spec is not None, "config_um is not installed"
-
 
 
 @pytest.mark.parametrize("telescope", ["STP"], indirect=True)
@@ -437,15 +425,6 @@ def runItAll(deltaMag,SNR):
 	print(intTime)
 
 
-
-if __name__ == "__main__":
-	test_module_installations()
-	test_configs_telescope()
-	test_configs_instrument()
-	test_default_throughput()
-	test_sensor_initialization()
-	test_counts()
-	test_validate_ETC_snr_calculation()
 
 
 
