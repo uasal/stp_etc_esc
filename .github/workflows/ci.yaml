@@ -25,12 +25,20 @@ jobs:
    
     - name: Install Package
       run: |
-        pip install .
+        pip install .[dev]
 
     - name: Run Tests and Save Results
       id: pytest_results
       run: |
-        pytest tests/ --tb=short --maxfail=1 --junitxml=report.xml | tee pytest_output.txt
-
+        cd tests
+        pytest --tb=short --maxfail=1 --junitxml=report.xml | tee pytest_output.txt
         PASSED=$(python -c "import re; f=open('pytest_output.txt').read(); match=re.search(r'(\d+) passed', f); print(match.group(1) if match else '0')")
         FAILED=$(grep -oP '\d+(?= failed)' pytest_output.txt || echo "0")
+        
+    - name: Upload Artifacts
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: pytest-results
+        path: |
+          tests/pytest_output.txt
