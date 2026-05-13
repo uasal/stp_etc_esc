@@ -1,7 +1,7 @@
 # This part shouldn't change
 [build-system]
 requires = ["setuptools", "setuptools-scm", "wheel"]
-build-backend = "setuptools.build_meta" 
+build-backend = "setuptools.build_meta"
 
 [project]
 name = "stp_etc_esc" # <- Edit this (repo name)
@@ -29,13 +29,13 @@ dependencies = [
 dynamic = ["version"]
 
 [project.optional-dependencies]
-dev= ["config_stp @ git+https://github.com/uasal/config_stp.git", "config_um @ git+https://github.com/uasal/config_um.git", "config_stp_esc@ git+https://github.com/uasal/config_stp_esc.git", "pytest"]  
+dev= ["config_stp @ git+https://github.com/uasal/config_stp.git", "config_um @ git+https://github.com/uasal/config_um.git", "config_um_esc@ git+https://github.com/uasal/config_um_esc.git",  "config_stp_esc@ git+https://github.com/uasal/config_stp_esc.git", "pytest"]
 
 # Edit this section with URLs for the README.md, CHANGELOG.md, and repository.
 [project.urls]
-Homepage = "https://github.com/uasal/stp_etc_esc/blob/main/README.md" 
-Changelog = "https://github.com/uasal/stp_etc_esc/blob/main/CHANGELOG.md" 
-Repository = "https://github.com/uasal/stp_etc_esc" 
+Homepage = "https://github.com/uasal/stp_etc_esc/blob/main/README.md"
+Changelog = "https://github.com/uasal/stp_etc_esc/blob/main/CHANGELOG.md"
+Repository = "https://github.com/uasal/stp_etc_esc"
 
 [tool.setuptools]
 packages = ["stp_etc_esc"] # Edit this to package name (repo name)
@@ -55,7 +55,7 @@ testpaths = [
 
 # This should match the path for the write_to under tool.setuptools_scm
 [tool.coverage.run]
-omit=["src/stp_etc_esc/_version.py"] # Modify the path where the _version.py lives 
+omit=["src/stp_etc_esc/_version.py"] # Modify the path where the _version.py lives
 
 [tool.setuptools.package-data]
 "stp_etc_esc" = ["support_data/**/*", "configs/**/*.toml"] # Edit the config_project part
