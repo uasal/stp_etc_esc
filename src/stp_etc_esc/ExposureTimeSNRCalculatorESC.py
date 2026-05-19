@@ -25,6 +25,8 @@ import pandas as pd
 from math import ceil, floor, log10
 import config_stp
 import config_stp_esc
+import config_um
+import config_um_esc
 from pathlib import Path
 from datetime import datetime, timezone, date, time
 from importlib.metadata import version
@@ -223,8 +225,11 @@ class Observatory:
         dark_current_xlist = dark_current_df.sensor_temperature
         dark_current_ylist = dark_current_df.dark_current
         dark_current_interp = interp1d(dark_current_xlist, dark_current_ylist)
+        if sensor_temp.value == -20.0:
+            dark_current = 0.0022* (u.electron/(u.s * u.pix))
+        else:
             
-        dark_current = dark_current_interp(sensor_temp.value) * (u.electron/(u.s * u.pix))
+            dark_current = dark_current_interp(sensor_temp.value) * (u.electron/(u.s * u.pix))
         #dark_current /= gain  # convert electron units to counts
             
             # read noise(gain-setting)
@@ -508,27 +513,48 @@ class Observatory:
             #plot: conditional: make plots of the bandwidth when adding every optical component
         
         # Update observatory properties based on latest specifications
+        #Reset bandpasses if running new instance of make_STP()
+        self.bandpass = SpectralElement(Box1D, amplitude=1, x_0=9000, width=15000)
+        self.precoron_bandpass = SpectralElement(Box1D, amplitude=1, x_0=9000, width=15000)
+        self.coron_bandpass = SpectralElement(Box1D,amplitude=1,x_0=9000,width=15000)
+        self.qe_curves = []
+        self.filters = []
+        self.qe_wpeak = None
+        self.normal_bp = SpectralElement(Box1D,amplitude=1,x_0=9000,width=10000)
 
         if telconfig == 'DEFAULT':
 
             self.telescope_config = config_stp.load_config_values()
             self.telescope_config_source = 'Config_STP'+version('config_stp')
+        elif telconfig == 'UM':
+
+            self.telescope_config = config_um.load_config_values()
+            self.telescope_config_source = 'Config_UM'+version('config_um')
         else:
             self.telescope_config = telconfig
             self.telescope_config_source = 'Custom Telescope'
         if escconfig == 'DEFAULT':
             self.instrument_config = config_stp_esc.load_config_values()
             self.instrument_config_source = 'Config_STP_ESC'+version('config_stp_esc')
+        elif escconfig == 'UM':
+            self.instrument_config = config_um_esc.load_config_values()
+            self.instrument_config_source = 'Config_UM_ESC'+version('config_um_esc')
         else:
             self.instrument_config = escconfig
             self.instrument_config_source = 'Custom Instrument'
         if telpath == 'DEFAULT':
 
             self.telescope_SP = Path(config_stp.get_data_path())
+        elif telpath == 'UM':
+
+            self.telescope_SP = Path(config_um.get_data_path())
         else:
             self.telescope_SP = telpath
         if escpath == 'DEFAULT':
             self.instrument_SP = Path(config_stp_esc.get_data_path())
+        elif escpath == 'UM':
+            self.instrument_SP = Path(config_um_esc.get_data_path())
+
         else:
             self.instrument_SP = escpath
 
@@ -587,6 +613,11 @@ class Observatory:
         self.add_generic_filter(self.primary_filter,fbw=self.instrument_config['common_params'][arm_key]['optics']['filter']['bandwidth'],num_curves=1,plot=plot) #filter
 
         #self.precoron_bandpass = self.bandpass #For saving the bandpass for non-coronagraph optics
+
+        #Temporary placeholder for inserting dichroic
+
+        self.add_generic_optic(self.instrument_config['common_params'][arm_key]['optics']['dichroic']['dichroic_throughput'],plot=plot)
+
 
 
         for key in self.instrument_config['common_params'][arm_key]['optics'].keys():
