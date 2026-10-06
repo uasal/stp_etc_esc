@@ -589,7 +589,7 @@ class Observatory:
         self.focal_len          = self.f_num * self.diameter_primary
         self.rms_surf           = u.Quantity(self.telescope_config['telescope']['optics']['m1']['surface_rms'])
         self.jitter_rms         = u.Quantity(self.telescope_config['observatory']['pointing']['jitter_rms'])
-        self.resel              = np.pi*(((self.primary_filter)/2/self.diameter_primary*u.radian)**2).to(u.arcsec**2,equivalencies=u.dimensionless_angles()) #Size of a resolution element. Needed for SNR calculations
+        self.resel              = np.pi*(((self.primary_filter)/self.diameter_primary*u.radian)**2).to(u.arcsec**2,equivalencies=u.dimensionless_angles()) #Size of a resolution element. Needed for SNR calculations
         self.ppgain             = 1./self.instrument_config['common_params']['ETC']['pp_gain'] #Helpful for SNR calculations later
         
         
