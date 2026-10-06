@@ -66,6 +66,13 @@ class Observatory:
         self.sensor_temp = None
         self.rawDH_contrast = None
         self.primary_filter = None
+        # One photometric aperture for every noise term (see set_photometric_aperture):
+        # a circle of radius core_radius_lamD * lambda/D. 0.7 lambda/D is the aperture
+        # the Ruane et al. (2018, JATIS 4, 015004) vortex core-throughput curve
+        # (support_data/transmissive_optics/vvc_throughput_vs_lamD.fits) is defined in,
+        # i.e. the aperture the planet and speckle counts are already measured in.
+        self.core_radius_lamD = 0.7
+        self.aperture_model = 'core'
         
         self.sky_counts = 0
         self.well_depth = None
@@ -463,7 +470,30 @@ class Observatory:
     
     # Calculate the mean PSF based on the mean wavelength of combined Spectral Elements
     # OR from a user-selected wavelength
-    def calc_PSF(self, wavelength=None, approx_type='sq'):
+    #
+    # Number of detector pixels the dark-current and read-noise terms are summed over.
+    # approx_type=None (default) follows self.aperture_model:
+    #   'core'  -> the photometric aperture pi*(core_radius_lamD*lambda/D)^2 / plate_scale^2:
+    #              the same aperture the planet/speckle counts and (via self.resel) the
+    #              zodi/exozodi terms use. Evaluated at the science-filter centre unless a
+    #              wavelength is given; fractional pixel counts are kept (the detector
+    #              oversamples lambda/D by several pixels, so rounding is unnecessary).
+    #   'sq'/'circ' (legacy) -> an n x n box / inscribed circle, n = ceil(2*1.22*lambda*f#/pixel)
+    #              (the Airy first-null diameter at the bandpass peak wavelength); 4-5x the
+    #              core-aperture area and the pre-2026 default.
+    def calc_PSF(self, wavelength=None, approx_type=None):
+
+        if approx_type is None:
+            approx_type = 'core' if self.aperture_model == 'core' else 'sq'
+
+        if approx_type.lower() in ['core', 'aperture', 'photometric']:
+            if wavelength is None:
+                wavelength = self.primary_filter
+            lamD = (wavelength / self.diameter_primary * u.radian).to(u.arcsec, equivalencies=u.dimensionless_angles())
+            omega = np.pi * (self.core_radius_lamD * lamD) ** 2
+            self.psf_diameter = (2 * self.core_radius_lamD * wavelength * self.f_num).to('um')
+            self.num_psf_pixels = (omega / (self.plate_scale * u.arcsec) ** 2).decompose().value * u.pix
+            return self.psf_diameter, self.num_psf_pixels
         
         if not wavelength == None:
             psf_diameter = 2*1.22*wavelength*self.f_num
@@ -499,6 +529,37 @@ class Observatory:
         
         
   
+    # Define ONE photometric aperture for all noise terms.
+    #
+    # The planet and speckle count rates are measured through the vortex core-throughput
+    # curve, i.e. inside a circle of radius 0.7 lambda/D around the planet. Previously the
+    # zodi/exozodi terms were scaled to pi*(lambda/2D)^2 (a circle of DIAMETER lambda/D,
+    # half that area) and the dark/read terms to a ceil(2.44*lambda*f#/pixel)^2 box
+    # (4-5x that area), so the three groups of terms were evaluated over three different
+    # apertures. With model='core' (default) every term uses the core aperture:
+    #     resel          = pi * (core_radius_lamD * lambda/D)^2   [arcsec^2]
+    #     num_psf_pixels = resel / plate_scale^2                    [pix]
+    # model='legacy' restores the previous mixed apertures. The wavelength defaults to the
+    # science-filter centre (self.primary_filter), the wavelength resel always used.
+    def set_photometric_aperture(self, model='core', core_radius_lamD=None, wavelength=None):
+        if core_radius_lamD is not None:
+            self.core_radius_lamD = float(core_radius_lamD)
+        model = str(model).lower()
+        if wavelength is None:
+            wavelength = self.primary_filter
+        lamD = (wavelength / self.diameter_primary * u.radian).to(u.arcsec, equivalencies=u.dimensionless_angles())
+        if model == 'core':
+            self.aperture_model = 'core'
+            self.resel = np.pi * (self.core_radius_lamD * lamD) ** 2
+            self.calc_PSF(wavelength=wavelength, approx_type='core')
+        elif model == 'legacy':
+            self.aperture_model = 'legacy'
+            self.resel = np.pi * (lamD / 2) ** 2  # pre-2026 "resolution element"
+            self.calc_PSF(wavelength=None, approx_type='sq')
+        else:
+            raise ValueError(f"Unknown photometric aperture model {model!r}; use 'core' or 'legacy'.")
+        return self.resel, self.num_psf_pixels
+
     ### class functions ###
     
     # Create a Preconfigured Observatory using submodule at 'uasal/stp_reference_data.git'
@@ -589,7 +650,9 @@ class Observatory:
         self.focal_len          = self.f_num * self.diameter_primary
         self.rms_surf           = u.Quantity(self.telescope_config['telescope']['optics']['m1']['surface_rms'])
         self.jitter_rms         = u.Quantity(self.telescope_config['observatory']['pointing']['jitter_rms'])
-        self.resel              = np.pi*(((self.primary_filter)/2/self.diameter_primary*u.radian)**2).to(u.arcsec**2,equivalencies=u.dimensionless_angles()) #Size of a resolution element. Needed for SNR calculations
+        # self.resel (solid angle the zodi/exozodi surface brightness is integrated over) is
+        # set together with num_psf_pixels in set_photometric_aperture() once the sensor
+        # plate scale is known, so both derive from the same aperture.
         self.ppgain             = 1./self.instrument_config['common_params']['ETC']['pp_gain'] #Helpful for SNR calculations later
         
         
@@ -658,8 +721,9 @@ class Observatory:
 
         self.set_rawDH_contrast(self.instrument_config['common_params']['ETC']['rawDH_contrast_'+contrast]) #Set the raw dark hole contrast. Needed for SNR calculations
             
-        # Calculate PSF
-        self.calc_PSF(wavelength=None, approx_type='sq')
+        # Photometric aperture for the noise terms (resel + num_psf_pixels); default
+        # 'core' = the r = 0.7 lambda/D aperture of the planet/speckle counts.
+        self.set_photometric_aperture(model=self.aperture_model)
 
     def save_nonCoronThruput(self,savedir='.',savepath='nonCoronThruput'):
         #####Save the noncoronagraphic throughput (all optics except FPM) as a .txt########

@@ -95,7 +95,21 @@ def test_sensor_initialization(telescope):
 		assert round(obs.plate_scale,6) == 0.008694, "Sensor check: Incorrect plate scale. Potentially corrupt or modified configuration file."
 
 
-	assert obs.num_psf_pixels.value == 225, "Incorrect PSF size."
+	# Default: one photometric aperture (r = core_radius_lamD * lambda/D) for every noise
+	# term, sized in pixels from the plate scale at the science-filter centre.
+	lamD = (obs.primary_filter / obs.diameter_primary * u.radian).to(u.arcsec, equivalencies=u.dimensionless_angles())
+	omega = np.pi * (obs.core_radius_lamD * lamD) ** 2
+	assert obs.aperture_model == 'core' and obs.core_radius_lamD == 0.7
+	assert obs.resel.unit == u.arcsec**2
+	assert obs.resel.value == pytest.approx(omega.value, rel=1e-9), "resel is not the core aperture."
+	expected_pix = (omega / (obs.plate_scale * u.arcsec) ** 2).decompose().value
+	assert obs.num_psf_pixels.value == pytest.approx(expected_pix, rel=1e-9), "Incorrect photometric-aperture pixel count."
+	# The legacy Airy-box approximation is still available and unchanged.
+	_, n_legacy = obs.calc_PSF(approx_type='sq')
+	assert n_legacy.value == 225, "Incorrect legacy PSF box size."
+	resel_legacy, n_legacy2 = obs.set_photometric_aperture('legacy')
+	assert n_legacy2.value == 225 and resel_legacy.value == pytest.approx(np.pi * (lamD.value / 2) ** 2)
+	assert n_legacy2.value > obs.set_photometric_aperture('core')[1].value, "legacy box must exceed the core aperture"
 
 	return
 
@@ -114,6 +128,10 @@ def test_counts(telescope):
 	zodi_magnitude_normalization = float(data_telescope['astrophysics']['zodi']['zodi_mag_r'])
 	obs = etsc.Observatory(telescope,2.4*u.m,36.45*u.m)
 	obs.make_STP()
+	# The reference values below were generated with the pre-2026 mixed apertures
+	# (resel = pi(lambda/2D)^2, 225-px Airy box); evaluate them in that mode. TODO:
+	# regenerate under the default 'core' aperture and drop this line.
+	obs.set_photometric_aperture('legacy')
 	obs.set_generic_source(1e-8,0)
 	obs.set_background(background_file = None, plot=True)
 	obs.make_observation(hoststarflux=-0.353, planetdeltamag=20,bg_flux=22.5,
@@ -349,10 +367,12 @@ def Cp_Cb_M(static_params, coronagraph, target, deltaMag):
 	C_p = (C_star * 10 ** (-0.4 * deltaMag) * eta * coronagraph["tau_core"]).decompose()
 	print('C_p',C_p)
 
-    # Compute size of critically sampled photometric aperture
+    # Photometric aperture: the r = 0.7 lambda/D core the planet/speckle counts
+    # (tau_core, Ruane+2018) are measured in -- the ETC's default aperture for
+    # every noise term (Observatory.set_photometric_aperture).
     # This should have units of angle^2
     # Hint: this is where that equivalencies input might be handy
-	Omega = np.pi * ((static_params["lam"] / 2 / static_params["D"]) ** 2).to(
+	Omega = np.pi * ((0.7 * static_params["lam"] / static_params["D"]) ** 2).to(
         u.arcsec**2, equivalencies=u.dimensionless_angles()
     )
 
@@ -390,7 +410,6 @@ def Cp_Cb_M(static_params, coronagraph, target, deltaMag):
     # number of detector pixels in the photometric aperture = Omega / theta^2
     # this value should be unitless
 	Npix = (Omega / static_params["pixelScale"] ** 2.0).decompose().value
-	Npix = 225.0
 
 	print('Photometric Aperture Pixels',Npix)
 
