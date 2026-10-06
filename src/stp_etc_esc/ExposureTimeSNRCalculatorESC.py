@@ -659,7 +659,7 @@ class Observatory:
         self.set_rawDH_contrast(self.instrument_config['common_params']['ETC']['rawDH_contrast_'+contrast]) #Set the raw dark hole contrast. Needed for SNR calculations
             
         # Calculate PSF
-        self.calc_PSF(wavelength=None, approx_type='sq')
+        self.calc_PSF(wavelength=None, approx_type='c')
 
     def save_nonCoronThruput(self,savedir='.',savepath='nonCoronThruput'):
         #####Save the noncoronagraphic throughput (all optics except FPM) as a .txt########
