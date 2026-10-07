@@ -70,10 +70,16 @@ class Observatory:
         self.sky_counts = 0
         self.well_depth = None
         
-        self.bandpass = SpectralElement(Box1D, amplitude=1, x_0=9000, width=10000)
-        self.precoron_bandpass = SpectralElement(Box1D, amplitude=1, x_0=9000, width=10000)
-        self.coron_bandpass = SpectralElement(Box1D,amplitude=1,x_0=9000,width=10000)
+        # Every bandpass starts as this box before any component is applied.
+        self.starting_bandpass = SpectralElement(
+            Box1D, amplitude=1, x_0=9000, width=10000)
         self.qe_curves = []
+        # Ordered record of every throughput component added, so that a
+        # throughput budget can be produced from the same curves.
+        self.throughput_components = []
+        # bandpass, precoron_bandpass and coron_bandpass are always built
+        # from starting_bandpass and the registered components.
+        self.build_bandpasses()
         self.filters = []
         self.qe_wpeak = None
         self.normal_bp = SpectralElement(Box1D,amplitude=1,x_0=9000,width=10000)
@@ -163,21 +169,217 @@ class Observatory:
     
     
     ### Add Spectral Elements
-     
+
+    def _record_component(self, name, category, group, element, source, count,
+                          apply_to_bandpass, apply_to_precoron, apply_to_coron):
+        """Append one throughput component to self.throughput_components.
+
+        Records the SpectralElement an add_*() method applies, and which of the
+        three bandpasses build_bandpasses() should apply it to.
+        Returns the dictionary so callers can add extra metadata.
+        """
+        component = {
+            "name": name if name is not None else category,
+            "category": category,
+            "group": group,
+            "element": element,
+            "source": source,
+            "count": count,
+            "apply_to_bandpass": apply_to_bandpass,
+            "apply_to_precoron": apply_to_precoron,
+            "apply_to_coron": apply_to_coron,
+        }
+        self.throughput_components.append(component)
+        return component
+
+    def build_bandpasses(self):
+        """Rebuild all three bandpasses from the registered components."""
+        bandpass = self.starting_bandpass
+        precoron_bandpass = self.starting_bandpass
+        coron_bandpass = self.starting_bandpass
+
+        for component in self.throughput_components:
+            element = component["element"]
+
+            if component["apply_to_bandpass"]:
+                bandpass = bandpass * element
+
+            if component["apply_to_precoron"]:
+                precoron_bandpass = precoron_bandpass * element
+
+            if component["apply_to_coron"]:
+                coron_bandpass = coron_bandpass * element
+
+        self.bandpass = bandpass
+        self.precoron_bandpass = precoron_bandpass
+        self.coron_bandpass = coron_bandpass
+
+    def get_throughput_budget(self, wavelength, bandpass="bandpass"):
+        """Throughput budget of the registered components at one wavelength.
+
+        Returns a pandas DataFrame with one row per registered component, in
+        the order the components were added:
+            throughput             the component's own throughput
+            applied                whether it is part of the chosen bandpass
+            cumulative_throughput  running product of the applied components,
+                                   starting from starting_bandpass, so the
+                                   last row equals the chosen bandpass
+
+        bandpass is "bandpass", "precoron_bandpass" or "coron_bandpass".
+        wavelength is an astropy Quantity, or a plain number in Angstrom.
+        This only reads the registry; it does not change anything.
+        """
+        flag_for_bandpass = {
+            "bandpass": "apply_to_bandpass",
+            "precoron_bandpass": "apply_to_precoron",
+            "coron_bandpass": "apply_to_coron",
+        }
+        if bandpass not in flag_for_bandpass:
+            raise ValueError(
+                f"Unknown bandpass {bandpass!r}; use one of "
+                f"{list(flag_for_bandpass)}")
+        flag = flag_for_bandpass[bandpass]
+
+        if not isinstance(wavelength, u.Quantity):
+            wavelength = wavelength * u.AA
+
+        cumulative = float(self.starting_bandpass(wavelength).value)
+        rows = []
+        for component in self.throughput_components:
+            throughput = float(component["element"](wavelength).value)
+            applied = component[flag]
+            if applied:
+                cumulative = cumulative * throughput
+            rows.append({
+                "name": component["name"],
+                "category": component["category"],
+                "group": component["group"],
+                "count": component["count"],
+                "applied": applied,
+                "throughput": throughput,
+                "cumulative_throughput": cumulative,
+            })
+
+        columns = ["name", "category", "group", "count", "applied",
+                   "throughput", "cumulative_throughput"]
+        return pd.DataFrame(rows, columns=columns)
+
+    def plot_throughput_budget(self, wavelengths=None, bandpass="bandpass",
+                               show_components=True, show_cumulative=True,
+                               show_final=True, show_excluded=True, ax=None):
+        """Plot the registered components and their running product.
+
+        Draws, on one matplotlib axes:
+            each component's own throughput (registry order). Components
+                not part of the chosen bandpass are dashed grey and
+                labelled "(not in <bandpass>)"; they never change the
+                running product;
+            the running product after each applied component, starting
+                from starting_bandpass, in the same colour as that
+                component;
+            the actual ETC bandpass, black dotted, which the last running
+                product should match.
+
+        bandpass is "bandpass", "precoron_bandpass" or "coron_bandpass".
+        wavelengths is a 1-D astropy Quantity or a 1-D list/array in
+        Angstrom. By default it is a 1 Angstrom grid across the
+        starting_bandpass box; pass a finer grid to look closely at a
+        narrow filter. A legend is not added; call ax.legend() if wanted.
+        This only reads the registry; it does not change anything.
+
+        Returns fig, ax and a dict of the drawn lines:
+            {"components": [...], "cumulative": [...], "final": line or None}
+        """
+        flag_for_bandpass = {
+            "bandpass": "apply_to_bandpass",
+            "precoron_bandpass": "apply_to_precoron",
+            "coron_bandpass": "apply_to_coron",
+        }
+        if bandpass not in flag_for_bandpass:
+            raise ValueError(
+                f"Unknown bandpass {bandpass!r}; use one of "
+                f"{list(flag_for_bandpass)}")
+        flag = flag_for_bandpass[bandpass]
+
+        if wavelengths is None:
+            # 1 Angstrom steps across the starting box, both ends included.
+            centre = self.starting_bandpass.model.x_0.value
+            width = self.starting_bandpass.model.width.value
+            start = centre - width / 2
+            number_of_points = int(np.floor(width)) + 1
+            grid = start + np.arange(number_of_points)
+        elif isinstance(wavelengths, u.Quantity):
+            grid = wavelengths.to_value(u.AA)
+        else:
+            grid = np.asarray(wavelengths, dtype=float)
+        if np.ndim(grid) != 1:
+            raise ValueError(
+                "wavelengths must be a 1-D array of wavelengths")
+        wavelength_grid = grid * u.AA
+
+        if ax is None:
+            fig, ax = plt.subplots()
+        else:
+            fig = ax.figure
+
+        lines = {"components": [], "cumulative": [], "final": None}
+        cumulative = np.asarray(
+            self.starting_bandpass(wavelength_grid).value, dtype=float)
+
+        for component in self.throughput_components:
+            name = component["name"]
+            values = np.asarray(
+                component["element"](wavelength_grid).value, dtype=float)
+            applied = component[flag]
+
+            colour = None   # let matplotlib choose unless linked below
+            if show_components and applied:
+                line, = ax.plot(grid, values, linewidth=1, alpha=0.5,
+                                label=name)
+                lines["components"].append(line)
+                colour = line.get_color()
+            elif show_components and show_excluded:
+                line, = ax.plot(grid, values, linestyle="--", color="gray",
+                                linewidth=1, alpha=0.5,
+                                label=f"{name} (not in {bandpass})")
+                lines["components"].append(line)
+
+            if applied:
+                cumulative = cumulative * values
+                if show_cumulative:
+                    line, = ax.plot(grid, cumulative, linewidth=2,
+                                    color=colour,
+                                    label=f"cumulative to {name}")
+                    lines["cumulative"].append(line)
+
+        if show_final:
+            final_values = getattr(self, bandpass)(wavelength_grid).value
+            line, = ax.plot(grid, final_values, color="black",
+                            linestyle=":", linewidth=2.5,
+                            label=f"{bandpass} (ETC)")
+            lines["final"] = line
+
+        ax.set_xlabel("Wavelength [Angstrom]")
+        ax.set_ylabel("Throughput")
+        ax.set_title(f"Throughput budget: {bandpass}")
+        return fig, ax, lines
+
     # Add Quantum Efficiancy properties
-    def add_qe_curve(self, qe_fits_file, wave_unit='angstrom', num_curves=1, plot=False):
-                
+    def add_qe_curve(self, qe_fits_file, wave_unit='angstrom', num_curves=1, plot=False,
+                     name=None, group=None):
+
         self.qe_curves.append(f"{qe_fits_file} x {num_curves}")
-        
+
         bp = SpectralElement.from_file(qe_fits_file, wave_unit=wave_unit)
 
         for num in range(num_curves-1):
             bp *= SpectralElement.from_file(qe_fits_file, wave_unit=wave_unit)
 
-        self.bandpass *= bp
+        self._record_component(name, "qe_curve", group, bp, qe_fits_file, num_curves,
+                               apply_to_bandpass=True, apply_to_precoron=True,
+                               apply_to_coron=False)
+        self.build_bandpasses()
 
-        self.precoron_bandpass *= bp
-        
         if plot==True:
             bp.plot()
     
@@ -194,6 +396,8 @@ class Observatory:
                    , read_noise = None
                    , well_depth = None
                    , plot=False
+                   , name=None
+                   , group=None
                   ):
         
         if sensor_temp.unit != u.Celsius:
@@ -280,7 +484,11 @@ class Observatory:
         for num in range(num_curves-1):
             bp *= SpectralElement.from_file(sensor_qe_fits_file, wave_unit=wave_unit)
 
-        self.bandpass *= bp
+        # Detector QE is applied to the full bandpass only (not precoron).
+        self._record_component(name, "sensor_qe", group, bp, sensor_qe_fits_file,
+                               num_curves, apply_to_bandpass=True,
+                               apply_to_precoron=False, apply_to_coron=False)
+        self.build_bandpasses()
 
         if plot==True:
             bp.plot()
@@ -288,7 +496,8 @@ class Observatory:
         
         
     # Add mirrors
-    def add_mirror(self, coating_file, num_curves=1, wave_unit='nm',plot=False):
+    def add_mirror(self, coating_file, num_curves=1, wave_unit='nm',plot=False,
+                   name=None, group=None):
         
 
         mirror_qe_fits_file = coating_file
@@ -303,9 +512,10 @@ class Observatory:
         for num in range(num_curves-1):
             bp *= SpectralElement.from_file(mirror_qe_fits_file, wave_unit=wave_unit)
 
-        self.bandpass *= bp
-
-        self.precoron_bandpass *= bp
+        self._record_component(name, "mirror", group, bp, coating_file, num_curves,
+                               apply_to_bandpass=True, apply_to_precoron=True,
+                               apply_to_coron=False)
+        self.build_bandpasses()
 
 
         
@@ -315,7 +525,8 @@ class Observatory:
         
         
     # Add filter properties (from fits files). Not currently used for ESC
-    def add_filter(self, filter_fits_file, wave_unit='angstrom', num_curves=1, plot=False):
+    def add_filter(self, filter_fits_file, wave_unit='angstrom', num_curves=1, plot=False,
+                   name=None, group=None):
         
         
         self.filters.append(f"{filter_fits_file} x {num_curves}")
@@ -328,7 +539,11 @@ class Observatory:
             for num in range(num_curves-1):
                 bp *= SpectralElement.from_file(filter_fits_file)
 
-            self.bandpass *= bp
+            # This branch applies the filter to the full bandpass only.
+            self._record_component(name, "filter", group, bp, filter_fits_file,
+                                   num_curves, apply_to_bandpass=True,
+                                   apply_to_precoron=False, apply_to_coron=False)
+            self.build_bandpasses()
         
         # Otherwise use default filters
         else:
@@ -338,15 +553,17 @@ class Observatory:
             for num in range(num_curves-1):
                 bp *= SpectralElement.from_filter(filter_fits_file)
 
-            self.bandpass *= bp
-
-            self.precoron_bandpass *= bp
+            self._record_component(name, "filter", group, bp, filter_fits_file,
+                                   num_curves, apply_to_bandpass=True,
+                                   apply_to_precoron=True, apply_to_coron=False)
+            self.build_bandpasses()
         
         if plot==True:
             bp.plot()
 
     #Add a QE curve for a transmissive optic
-    def add_transmissive_optic(self,transmission_fits_file,wave_unit='angstrom',num_curves=1,plot=False,coronOnly=False):
+    def add_transmissive_optic(self,transmission_fits_file,wave_unit='angstrom',num_curves=1,plot=False,coronOnly=False,
+                               name=None, group=None):
         #Adds a transmissive optic with QE from a file
         #Inputs:
             #transmission_fits_file: path to fits or csv file with columns of wavelength and transmission out of 1
@@ -360,19 +577,20 @@ class Observatory:
         for num in range(num_curves-1):
             bp *= SpectralElement.from_file(transmission_fits_file, wave_unit=wave_unit)
 
-        self.bandpass *= bp
+        # coronOnly=True means "also apply to coron_bandpass".
+        self._record_component(name, "transmissive_optic", group, bp,
+                               transmission_fits_file, num_curves,
+                               apply_to_bandpass=True, apply_to_precoron=True,
+                               apply_to_coron=(coronOnly == True))
+        self.build_bandpasses()
 
-        self.precoron_bandpass *= bp
-
-        if coronOnly==True:
-            self.coron_bandpass *=bp
-        
         if plot==True:
             bp.plot()
 
 
     #Add generic/flat filter with constant transmission
-    def add_generic_filter(self, wavelength, fbw=0.05,num_curves=1, plot=False):
+    def add_generic_filter(self, wavelength, fbw=0.05,num_curves=1, plot=False,
+                           name=None, group=None):
         #Adds a generic, box shaped filter with 98% flat transmission
         #Inputs:
             #Wavelength: float: Central wavelength in Angstroms
@@ -384,15 +602,18 @@ class Observatory:
 
         for num in range(num_curves-1):
             bp *= SpectralElement(Box1D, amplitude=1, x_0=wavelength, width=fbw*wavelength)
-        self.bandpass *=bp
 
-        self.precoron_bandpass *= bp
+        self._record_component(name, "generic_filter", group, bp, wavelength,
+                               num_curves, apply_to_bandpass=True,
+                               apply_to_precoron=True, apply_to_coron=False)
+        self.build_bandpasses()
 
         if plot==True:
             bp.plot()
 
     #Adds a generic, box shaped flat optic with constant transmission
-    def add_generic_optic(self,reflectiv,num_curves=1,plot=False,coronOnly=False):
+    def add_generic_optic(self,reflectiv,num_curves=1,plot=False,coronOnly=False,
+                          name=None, group=None):
         #Adds a generic, box shaped optic with constant, flat transmission/reflectivity
         #Inputs:
             #reflectiv: float: Fractional reflectivity/transmission
@@ -404,15 +625,19 @@ class Observatory:
 
         for num in range(num_curves-1):
             bp *= SpectralElement(Box1D,amplitude=reflectiv,x_0=20000, width=39999)
-        self.bandpass *=bp
-        self.precoron_bandpass *= bp
-        if coronOnly==True:
-            self.coron_bandpass *=bp
+
+        # coronOnly=True means "also apply to coron_bandpass".
+        self._record_component(name, "generic_optic", group, bp, reflectiv,
+                               num_curves, apply_to_bandpass=True,
+                               apply_to_precoron=True,
+                               apply_to_coron=(coronOnly == True))
+        self.build_bandpasses()
 
         if plot == True:
             bp.plot()
 
-    def add_lamD_optic(self,throughput_fits_file,separation,num_curves=1,plot=False,coronOnly=False):
+    def add_lamD_optic(self,throughput_fits_file,separation,num_curves=1,plot=False,coronOnly=False,
+                       name=None, group=None):
         #Adds a throughput value to the bandpass that is dependent on off-axis lambda/D separation (e.g., focal plane mask)
         #Inputs:
             #throughput_fits_file: path to fits or csv file with throughput as a function of lambda/D
@@ -450,9 +675,18 @@ class Observatory:
 
         for num in range(num_curves-1):
             bp *= SpectralElement(Box1D,amplitude=throughput_value,x_0=20000, width=39999)
-        self.bandpass *=bp
-        if coronOnly==True:
-            self.coron_bandpass *=bp
+
+        # Never applied to precoron_bandpass; coronOnly=True also applies it
+        # to coron_bandpass. Keep how the single throughput value was chosen.
+        component = self._record_component(name, "lamD_optic", group, bp,
+                                           throughput_fits_file, num_curves,
+                                           apply_to_bandpass=True,
+                                           apply_to_precoron=False,
+                                           apply_to_coron=(coronOnly == True))
+        component["separation_arcsec"] = separation
+        component["lambda_over_d"] = lamD_separation
+        component["selected_throughput"] = float(throughput_value)
+        self.build_bandpasses()
 
         if plot == True:
             bp.plot()
@@ -514,10 +748,11 @@ class Observatory:
         
         # Update observatory properties based on latest specifications
         #Reset bandpasses if running new instance of make_STP()
-        self.bandpass = SpectralElement(Box1D, amplitude=1, x_0=9000, width=15000)
-        self.precoron_bandpass = SpectralElement(Box1D, amplitude=1, x_0=9000, width=15000)
-        self.coron_bandpass = SpectralElement(Box1D,amplitude=1,x_0=9000,width=15000)
+        self.starting_bandpass = SpectralElement(
+            Box1D, amplitude=1, x_0=9000, width=15000)
         self.qe_curves = []
+        self.throughput_components = []
+        self.build_bandpasses()
         self.filters = []
         self.qe_wpeak = None
         self.normal_bp = SpectralElement(Box1D,amplitude=1,x_0=9000,width=10000)
@@ -598,7 +833,8 @@ class Observatory:
 
         for key in self.telescope_config['telescope']['optics'].keys():
             coating = self.telescope_SP / Path(self.telescope_config['telescope']['optics'][key]['coating_refl'])
-            self.add_mirror(num_curves=1,coating_file=coating.as_posix(),plot=plot)
+            self.add_mirror(num_curves=1,coating_file=coating.as_posix(),plot=plot,
+                            name=key, group="telescope")
 
         #Begin ESC optics. If a transmission curve is unavailable, create generic optic
 
@@ -606,17 +842,20 @@ class Observatory:
             if 'oap' in key or 'flat' in key or 'sphere' in key or 'dm' in key or 'fsm' in key:
 
                 coating = self.instrument_SP / Path(self.instrument_config['common_params'][arm_key]['optics'][key]['coating_refl'])
-                self.add_mirror(num_curves=1, coating_file=coating.as_posix(),plot=plot)
+                self.add_mirror(num_curves=1, coating_file=coating.as_posix(),plot=plot,
+                                name=key, group="instrument")
             
 
 
-        self.add_generic_filter(self.primary_filter,fbw=self.instrument_config['common_params'][arm_key]['optics']['filter']['bandwidth'],num_curves=1,plot=plot) #filter
+        self.add_generic_filter(self.primary_filter,fbw=self.instrument_config['common_params'][arm_key]['optics']['filter']['bandwidth'],num_curves=1,plot=plot,
+                                name="filter", group="instrument") #filter
 
         #self.precoron_bandpass = self.bandpass #For saving the bandpass for non-coronagraph optics
 
         #Temporary placeholder for inserting dichroic
 
-        self.add_generic_optic(self.instrument_config['common_params'][arm_key]['optics']['dichroic']['dichroic_throughput'],plot=plot)
+        self.add_generic_optic(self.instrument_config['common_params'][arm_key]['optics']['dichroic']['dichroic_throughput'],plot=plot,
+                               name="dichroic", group="instrument")
 
 
 
@@ -624,16 +863,20 @@ class Observatory:
             if 'lp' in key or 'qwp' in key:
                 coating_init = self.instrument_config['common_params'][arm_key]['optics'][key]['pol_throughput']
                 if coating_init == 'none':
-                    self.add_generic_optic(0.99,num_curves=1,plot=plot,coronOnly=False) #Quarter wave plates. Needs update: transmission curve
+                    self.add_generic_optic(0.99,num_curves=1,plot=plot,coronOnly=False,
+                                           name=key, group="instrument") #Quarter wave plates. Needs update: transmission curve
                 else:
                     coating_ext = self.instrument_SP / Path(coating_init)
-                    self.add_transmissive_optic(coating_ext.as_posix(),num_curves=1,plot=plot,wave_unit='nm',coronOnly=False) #Polarizers
+                    self.add_transmissive_optic(coating_ext.as_posix(),num_curves=1,plot=plot,wave_unit='nm',coronOnly=False,
+                                                name=key, group="instrument") #Polarizers
                 if 'lp1' in key:
-                    self.add_generic_optic(0.5,num_curves=1,plot=plot,coronOnly=False) #Loss from polarization filtering
+                    self.add_generic_optic(0.5,num_curves=1,plot=plot,coronOnly=False,
+                                           name="lp1_pol_loss", group="instrument") #Loss from polarization filtering
                 #self.precoron_bandpass = self.bandpass #Only add in field-invariant throughputs, not the FPM
             elif 'fpm' in key:
                 throughput = self.instrument_SP / Path(self.instrument_config['common_params'][arm_key]['optics'][key]['throughput'])
-                self.add_lamD_optic(throughput.as_posix(),self.instrument_config['common_params']['sources']['companion']['separation'],num_curves=1,plot=plot,coronOnly=True) #VVC focal plane mask
+                self.add_lamD_optic(throughput.as_posix(),self.instrument_config['common_params']['sources']['companion']['separation'],num_curves=1,plot=plot,coronOnly=True,
+                                    name=key, group="instrument") #VVC focal plane mask
 
         #self.precoron_bandpass = self.bandpass/self.coron_bandpass
 
@@ -651,6 +894,8 @@ class Observatory:
                        , read_noise = None
                        , well_depth = None
                        , plot=plot
+                       , name="detector_qe"
+                       , group="detector"
                        )
 
         #Choose Spec or CBE contrast

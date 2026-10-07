@@ -1,0 +1,73 @@
+# Historical regression environment: reproduces the behaviour of the unmodified ETC. These package versions are NOT project dependency requirements.
+# generated_utc: 2026-10-05T06:03:26+00:00
+# stp_etc_esc_commit: 69da4fea654e3fbf4a0c2c48edc939236a4927c3
+# stp_etc_esc_src_dirty: False
+# config_stp_commit: b13e31bf4372ec5430a328319ae7b07cc6030aaa
+# config_stp_esc_commit: 4c048724596aa3be34c8059bdcfd2d67ff5b3ed0
+# config_um_commit: 838ad1ca0134a9c5d371399de0fe5b7779d84feb
+# config_um_esc_commit: 6b978bd986fa684c17a8fcb57ea16be54dc5ba06
+# utils_config_commit: 1273b742512cf78892e0cb59a57b816810e6b681
+# python: 3.12.15
+# numpy: 1.26.4
+# astropy: 6.1.7
+# synphot: 1.3.post0
+# scipy: 1.17.1
+# pandas: 3.0.6
+# observatory: Observatory('UM', 2.4*u.m, 36.45*u.m)
+# make_STP_args: {'telconfig': 'UM', 'escconfig': 'UM', 'telpath': 'UM', 'escpath': 'UM'}
+# set_generic_source_args: {'contrast': 1e-08, 'starMag': 0.0}
+# set_background_args: {'background_file': None}
+# make_observation_args: {'hoststarflux': 0.0, 'planetdeltamag': 20, 'bg_flux': 22.5, 'flux_units': 'vega', 'exobg_flux': 22}
+# calc_SNR_args: (600.0 s, 10.0 s)
+# calc_int_time_args: (5, 10.0 s)
+# values: repr() of Python floats (exact round trip); unit 'text' rows are compared as exact strings
+quantity,value,unit
+bandpass.wpeak,6325.091928999999,Angstrom
+bandpass.tpeak,0.05360507754777566,dimensionless
+bandpass.rectwidth,125.22049350381783,Angstrom
+precoron_bandpass.wpeak,6362.999999995577,Angstrom
+precoron_bandpass.tpeak,0.15376641033775215,dimensionless
+precoron_bandpass.rectwidth,122.31467270950537,Angstrom
+coron_bandpass.wpeak,1500.0,Angstrom
+coron_bandpass.tpeak,0.42495524148334046,dimensionless
+coron_bandpass.rectwidth,15000.004999993222,Angstrom
+num_mirrors,13.0,dimensionless
+len_qe_curves,22.0,dimensionless
+qe_curves[01],NIST_1st_surface_Al.csv x 1,text
+qe_curves[02],qe_ag_fss99_profile_mirror.fits x 1,text
+qe_curves[03],qe_ag_fss99_profile_mirror.fits x 1,text
+qe_curves[04],qe_ag_fss99_profile_mirror.fits x 1,text
+qe_curves[05],qe_ag_fss99_profile_mirror.csv x 1,text
+qe_curves[06],qe_ag_fss99_profile_mirror.csv x 1,text
+qe_curves[07],qe_ag_fss99_profile_mirror.csv x 1,text
+qe_curves[08],qe_ag_fss99_profile_mirror.csv x 1,text
+qe_curves[09],qe_ag_fss99_profile_mirror.csv x 1,text
+qe_curves[10],bmc_dm_au.csv x 1,text
+qe_curves[11],qe_ag_fss99_profile_mirror.csv x 1,text
+qe_curves[12],qe_ag_fss99_profile_mirror.csv x 1,text
+qe_curves[13],qe_ag_fss99_profile_mirror.csv x 1,text
+qe_curves[14],6299.999999999999 Angstrom x 1,text
+qe_curves[15],0.9 x 1,text
+qe_curves[16],meadowlark_VIS_pol_transmit.csv x 1,text
+qe_curves[17],0.5 x 1,text
+qe_curves[18],0.99 x 1,text
+qe_curves[19],4.6172731534241525 x 1,text
+qe_curves[20],0.99 x 1,text
+qe_curves[21],meadowlark_VIS_pol_transmit.csv x 1,text
+qe_curves[22],ZWO_ASI294MM_Pro_QE_curve.csv x 1,text
+plate_scale,0.008671917437783469,dimensionless
+num_psf_pixels,169.0,pix
+qe_wpeak,6325.091928999999,Angstrom
+surf_area,5.725552611167399,m2
+source_counts,2.875662682401143,electron / s
+sky_counts,0.0006327289470508362,electron / s
+speckle_counts,2.875662682401143,electron / s
+exozodi_counts,0.0006716092651367657,electron / s
+"calc_SNR(600 s, 10 s)",6.642061523391008,dimensionless
+"calc_int_time(5, 10 s)",253.3401746786112,ct s / electron
+calc_int_time.noise_terms.dark_current_x_npix,0.3718,dimensionless
+calc_int_time.noise_terms.read_noise_sq_x_npix_per_exptime,56.724980077419744,dimensionless
+calc_int_time.noise_terms.sky_counts,0.0006327289470508362,dimensionless
+calc_int_time.noise_terms.exozodi_counts,0.0006716092651367657,dimensionless
+calc_int_time.noise_terms.speckle_counts,2.875662682401143,dimensionless
+calc_saturation_time,448335.4291572868,s
