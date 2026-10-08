@@ -192,6 +192,31 @@ class Observatory:
         self.throughput_components.append(component)
         return component
 
+    def _selected_component_names(self, components):
+        """Names to include in a budget table or plot; None means all.
+
+        components may be None, one component name, or a list/tuple of
+        names. Every requested name must belong to a registered component.
+        """
+        if components is None:
+            return None
+        if isinstance(components, str):
+            names = [components]
+        elif isinstance(components, (list, tuple)):
+            names = list(components)
+        else:
+            raise TypeError(
+                "components must be None, a component name, or a list or "
+                "tuple of component names")
+        registered = [component["name"]
+                      for component in self.throughput_components]
+        missing = [name for name in names if name not in registered]
+        if missing:
+            raise ValueError(
+                f"Unknown component name(s) {missing}; registered names "
+                f"are {registered}")
+        return set(names)
+
     def build_bandpasses(self):
         """Rebuild all three bandpasses from the registered components."""
         bandpass = self.starting_bandpass
@@ -214,7 +239,8 @@ class Observatory:
         self.precoron_bandpass = precoron_bandpass
         self.coron_bandpass = coron_bandpass
 
-    def get_throughput_budget(self, wavelength, bandpass="bandpass"):
+    def get_throughput_budget(self, wavelength, bandpass="bandpass",
+                              components=None):
         """Throughput budget of the registered components at one wavelength.
 
         Returns a pandas DataFrame with one row per registered component, in
@@ -227,6 +253,9 @@ class Observatory:
 
         bandpass is "bandpass", "precoron_bandpass" or "coron_bandpass".
         wavelength is an astropy Quantity, or a plain number in Angstrom.
+        components is None (all), one component name, or a list/tuple of
+        names. Only the requested rows are returned; cumulative_throughput
+        is still the running product of the whole system.
         This only reads the registry; it does not change anything.
         """
         flag_for_bandpass = {
@@ -239,6 +268,7 @@ class Observatory:
                 f"Unknown bandpass {bandpass!r}; use one of "
                 f"{list(flag_for_bandpass)}")
         flag = flag_for_bandpass[bandpass]
+        selected = self._selected_component_names(components)
 
         if not isinstance(wavelength, u.Quantity):
             wavelength = wavelength * u.AA
@@ -250,6 +280,10 @@ class Observatory:
             applied = component[flag]
             if applied:
                 cumulative = cumulative * throughput
+            # Filtering only chooses which rows are returned; the running
+            # product above always includes every registered component.
+            if selected is not None and component["name"] not in selected:
+                continue
             rows.append({
                 "name": component["name"],
                 "category": component["category"],
@@ -266,7 +300,8 @@ class Observatory:
 
     def plot_throughput_budget(self, wavelengths=None, bandpass="bandpass",
                                show_components=True, show_cumulative=True,
-                               show_final=True, show_excluded=True, ax=None):
+                               show_final=True, show_excluded=True, ax=None,
+                               components=None):
         """Plot the registered components and their running product.
 
         Draws, on one matplotlib axes:
@@ -285,6 +320,10 @@ class Observatory:
         Angstrom. By default it is a 1 Angstrom grid across the
         starting_bandpass box; pass a finer grid to look closely at a
         narrow filter. A legend is not added; call ax.legend() if wanted.
+        components is None (all), one component name, or a list/tuple of
+        names: only those components' curves are drawn, but every running
+        product still includes the whole system. Applied component curves
+        cycle through the line styles "-", "-." and ":".
         This only reads the registry; it does not change anything.
 
         Returns fig, ax and a dict of the drawn lines:
@@ -300,6 +339,7 @@ class Observatory:
                 f"Unknown bandpass {bandpass!r}; use one of "
                 f"{list(flag_for_bandpass)}")
         flag = flag_for_bandpass[bandpass]
+        selected = self._selected_component_names(components)
 
         if wavelengths is None:
             # 1 Angstrom steps across the starting box, both ends included.
@@ -325,28 +365,41 @@ class Observatory:
         lines = {"components": [], "cumulative": [], "final": None}
         cumulative = np.asarray(
             self.starting_bandpass(wavelength_grid).value, dtype=float)
+        line_styles = ["-", "-.", ":"]
+        applied_drawn = 0
+        # Component curves are drawn lighter when cumulative curves are
+        # drawn on top of them, and bolder when they are shown on their own.
+        if show_cumulative:
+            component_width, component_alpha = 1, 0.5
+        else:
+            component_width, component_alpha = 2, 0.9
 
         for component in self.throughput_components:
             name = component["name"]
             values = np.asarray(
                 component["element"](wavelength_grid).value, dtype=float)
             applied = component[flag]
+            drawn = selected is None or name in selected
 
             colour = None   # let matplotlib choose unless linked below
-            if show_components and applied:
-                line, = ax.plot(grid, values, linewidth=1, alpha=0.5,
-                                label=name)
+            if drawn and show_components and applied:
+                style = line_styles[applied_drawn % len(line_styles)]
+                applied_drawn += 1
+                line, = ax.plot(grid, values, linestyle=style,
+                                linewidth=component_width,
+                                alpha=component_alpha, label=name)
                 lines["components"].append(line)
                 colour = line.get_color()
-            elif show_components and show_excluded:
+            elif drawn and show_components and show_excluded:
                 line, = ax.plot(grid, values, linestyle="--", color="gray",
-                                linewidth=1, alpha=0.5,
+                                linewidth=component_width,
+                                alpha=component_alpha,
                                 label=f"{name} (not in {bandpass})")
                 lines["components"].append(line)
 
             if applied:
                 cumulative = cumulative * values
-                if show_cumulative:
+                if drawn and show_cumulative:
                     line, = ax.plot(grid, cumulative, linewidth=2,
                                     color=colour,
                                     label=f"cumulative to {name}")

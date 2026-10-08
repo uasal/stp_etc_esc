@@ -1401,3 +1401,116 @@ def test_countrate_scales_with_flat_throughput(tmp_path, monkeypatch):
     with_k = countrate_observatory(tmp_path, k=0.5)
     ratio = source_rate(with_k, 0.0) / source_rate(base, 0.0)
     assert ratio == pytest.approx(0.5, rel=1e-10)
+
+
+# ---------------------------------------------------------------------------
+# Stage 7: selecting components in get_throughput_budget() and
+# plot_throughput_budget(). Selection only chooses which rows or curves are
+# shown; every running product still includes the whole optical train.
+# ---------------------------------------------------------------------------
+
+def test_budget_single_component(tmp_path):
+    obs = budget_observatory(tmp_path)
+    budget = obs.get_throughput_budget(6300 * u.AA,
+                                       components="detector_qe")
+    assert len(budget) == 1
+    row = budget.iloc[0]
+    assert row["name"] == "detector_qe"
+    assert row["applied"]
+    assert row["throughput"] == pytest.approx(0.7, rel=1e-12, abs=0.0)
+    # The whole system up to and including the detector, not just 0.7.
+    assert row["cumulative_throughput"] == pytest.approx(
+        0.9 * 0.98 * 0.8 * 0.2 * 0.7, rel=1e-12, abs=0.0)
+
+
+def test_budget_selected_components_in_registry_order(tmp_path):
+    obs = budget_observatory(tmp_path)
+    as_list = obs.get_throughput_budget(6300 * u.AA,
+                                        components=["fpm", "m1"])
+    assert list(as_list["name"]) == ["m1", "fpm"]
+    as_tuple = obs.get_throughput_budget(6300 * u.AA,
+                                         components=("fpm", "m1"))
+    assert as_tuple.equals(as_list)
+
+
+def test_budget_selected_rows_match_full_budget(tmp_path):
+    obs = budget_observatory(tmp_path)
+    selection = ["filter", "fpm", "detector_qe"]
+    for name in ["bandpass", "precoron_bandpass", "coron_bandpass"]:
+        full = obs.get_throughput_budget(6300 * u.AA, bandpass=name)
+        part = obs.get_throughput_budget(6300 * u.AA, bandpass=name,
+                                         components=selection)
+        expected = full[full["name"].isin(selection)]
+        for column in ["name", "applied", "throughput",
+                       "cumulative_throughput"]:
+            assert list(part[column]) == list(expected[column])
+
+
+def test_plot_budget_draws_only_requested_components(tmp_path):
+    obs = budget_observatory(tmp_path)
+    fig, ax, lines = obs.plot_throughput_budget(
+        wavelengths=[6000.0, 6300.0], components=["filter", "detector_qe"],
+        ax=new_axes())
+    assert [line.get_label() for line in lines["components"]] == [
+        "filter", "detector_qe"]
+    assert [line.get_label() for line in lines["cumulative"]] == [
+        "cumulative to filter", "cumulative to detector_qe"]
+    # Running products of the whole system at 6000 A (outside the filter)
+    # and at 6300 A.
+    expected = [[0.0, 0.9 * 0.98],
+                [0.0, 0.9 * 0.98 * 0.8 * 0.2 * 0.7]]
+    for line, values in zip(lines["cumulative"], expected):
+        assert list(ydata(line)) == pytest.approx(
+            values, rel=1e-12, abs=0.0
+        )
+
+
+def test_plot_budget_final_complete_with_selection(tmp_path):
+    obs = budget_observatory(tmp_path)
+    wavelengths = np.arange(3000.0, 14001.0, 50.0)
+    fig, ax, lines = obs.plot_throughput_budget(
+        wavelengths=wavelengths, components="detector_qe", ax=new_axes())
+    actual = obs.bandpass(wavelengths * u.AA).value
+    assert list(ydata(lines["final"])) == pytest.approx(
+        list(actual), rel=1e-12, abs=0.0
+    )
+
+
+def test_component_selection_unknown_name(tmp_path):
+    obs = budget_observatory(tmp_path)
+    with pytest.raises(ValueError, match="no_such_part"):
+        obs.get_throughput_budget(6300 * u.AA, components="no_such_part")
+    with pytest.raises(ValueError, match="no_such_part"):
+        obs.plot_throughput_budget(
+            wavelengths=[6300.0], components=["m1", "no_such_part"],
+            ax=new_axes())
+    with pytest.raises(TypeError):
+        obs.get_throughput_budget(6300 * u.AA, components=5)
+
+
+def test_components_none_matches_default(tmp_path):
+    obs = budget_observatory(tmp_path)
+    default_budget = obs.get_throughput_budget(6300 * u.AA)
+    none_budget = obs.get_throughput_budget(6300 * u.AA, components=None)
+    assert none_budget.equals(default_budget)
+
+    w = [6000.0, 6300.0]
+    _, _, default = obs.plot_throughput_budget(wavelengths=w, ax=new_axes())
+    _, _, none = obs.plot_throughput_budget(wavelengths=w, components=None,
+                                            ax=new_axes())
+    for kind in ["components", "cumulative"]:
+        assert ([line.get_label() for line in none[kind]]
+                == [line.get_label() for line in default[kind]])
+        for line, ref in zip(none[kind], default[kind]):
+            assert list(ydata(line)) == list(ydata(ref))
+    assert list(ydata(none["final"])) == list(ydata(default["final"]))
+
+
+def test_plot_budget_applied_components_vary_linestyle(tmp_path):
+    obs = budget_observatory(tmp_path)
+    fig, ax, lines = obs.plot_throughput_budget(
+        wavelengths=[6300.0], ax=new_axes())
+    styles = {line.get_linestyle() for line in lines["components"]}
+    assert len(styles) >= 2
+    for component, total in zip(lines["components"], lines["cumulative"]):
+        assert total.get_color() == component.get_color()
