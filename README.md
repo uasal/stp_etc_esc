@@ -64,5 +64,43 @@ stp_etc_esc.__version__
 
 Included in this repository is an [example notebook](https://github.com/uasal/stp_etc_esc/blob/develop/notebooks/ESC_ExposureTimeSNRCalculator_Demo.ipynb) of how to use the exposure time calculator assuming the default configurations. There is also an [executable python script](https://github.com/uasal/stp_etc_esc/blob/develop/notebooks/etc_esc_requirements.py) that will run the exposure time calculator assuming the default configurations and generate figures calculating SNR and noise sources for various individual frame exposure times.
 
+### Running the notebooks
+
+The notebooks need a Jupyter kernel from an environment where `stp_etc_esc` is installed. For a new setup:
+
+```
+conda create -n stp-etc python=3.12
+conda activate stp-etc
+git clone https://github.com/uasal/stp_etc_esc.git
+cd stp_etc_esc
+python -m pip install -e ".[dev]"
+python -m pip install jupyterlab ipykernel
+python -m ipykernel install --user \
+    --name stp-etc \
+    --display-name "Python (stp-etc)"
+jupyter lab
+```
+
+Then open a notebook, such as `notebooks/ESC_ThroughputBudget_Demo.ipynb`, and select the **Python (stp-etc)** kernel from the Jupyter kernel menu.
+
+The `[dev]` extra is required: it installs the configuration packages that `stp_etc_esc` imports.
+
+**Troubleshooting.** If the imports fail, check in a notebook cell which Python the kernel uses:
+
+```python
+import sys
+print(sys.executable)
+```
+
+This should point to the environment where `stp_etc_esc` was installed. To confirm the kernel has the throughput-budget version of the ETC:
+
+```python
+import inspect
+from stp_etc_esc import ExposureTimeSNRCalculatorESC as etsc
+print(inspect.signature(etsc.Observatory.add_mirror))
+```
+
+The signature should include `name=None, group=None`.
+
 
 
