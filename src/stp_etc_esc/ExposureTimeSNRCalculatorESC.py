@@ -204,9 +204,12 @@ class Observatory:
         wave_unit = 'nm'
             
             # physical settings
-        # Default area, used only when the caller does not give one.
         if sensor_area is None:
-            sensor_area = 962.56*u.um * 962.56*u.um
+            raise ValueError(
+                "sensor_area must be provided as an area Quantity. "
+                "example: for a 256x256 region with 3.76 um pixels: "
+                "sensor_area = (256 * 3.76 * u.um)**2"
+            )
         #sensor_pixel_size = 3.76*(u.um/u.pix)
         sensor_pixel_size = (u.Quantity(self.instrument_config['common_params']['arm_a']['sensor']['pixel_size'])).to(u.um)*(1.0/u.pix)
             

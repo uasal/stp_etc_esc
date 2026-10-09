@@ -1,4 +1,5 @@
-"""add_sensor() must keep a caller-provided sensor_area.
+"""add_sensor() must keep a caller-provided sensor_area and must not
+assume a default when none is given.
 
 Uses small synthetic sensor curves written to tmp_path, so no configuration
 package data, FITS files or network access are needed.
@@ -10,7 +11,6 @@ import pytest
 from stp_etc_esc import ExposureTimeSNRCalculatorESC as etsc
 
 PIXEL_SIZE = 4.0 * u.um / u.pix
-DEFAULT_AREA = 962.56 * u.um * 962.56 * u.um
 
 
 def write_csv(path, header, rows):
@@ -69,13 +69,9 @@ def test_custom_sensor_area_in_other_units(observatory):
     assert observatory.num_pixels.value == pytest.approx(62500, rel=1e-12)
 
 
-def test_default_sensor_area_unchanged(observatory):
-    add_sensor(observatory)
-
-    assert observatory.sensor_area == DEFAULT_AREA
-    expected = (DEFAULT_AREA / PIXEL_SIZE**2).to(u.pix**2).value
-    assert observatory.num_pixels.value == pytest.approx(expected,
-                                                         rel=1e-12)
+def test_missing_sensor_area_raises(observatory):
+    with pytest.raises(ValueError, match="sensor_area must be provided"):
+        add_sensor(observatory, sensor_area=None)
 
 
 def test_sensor_area_does_not_change_other_detector_values(tmp_path):
@@ -86,12 +82,12 @@ def test_sensor_area_does_not_change_other_detector_values(tmp_path):
         add_sensor(obs, **kwargs)
         return obs
 
-    default = build("default")
-    custom = build("custom", sensor_area=1 * u.mm**2)
+    small = build("small", sensor_area=1000 * u.um * 2000 * u.um)
+    large = build("large", sensor_area=1 * u.mm**2)
 
     for name in ("gain", "dark_current", "read_noise", "well_depth",
                  "pixel_size", "plate_scale", "sensor_temp"):
-        assert getattr(custom, name) == getattr(default, name), name
+        assert getattr(large, name) == getattr(small, name), name
     wavelengths = np.array([3000, 6300, 10000]) * u.AA
-    assert np.array_equal(custom.bandpass(wavelengths),
-                          default.bandpass(wavelengths))
+    assert np.array_equal(large.bandpass(wavelengths),
+                          small.bandpass(wavelengths))
