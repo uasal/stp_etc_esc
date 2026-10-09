@@ -204,7 +204,9 @@ class Observatory:
         wave_unit = 'nm'
             
             # physical settings
-        sensor_area = 962.56*u.um * 962.56*u.um
+        # Default area, used only when the caller does not give one.
+        if sensor_area is None:
+            sensor_area = 962.56*u.um * 962.56*u.um
         #sensor_pixel_size = 3.76*(u.um/u.pix)
         sensor_pixel_size = (u.Quantity(self.instrument_config['common_params']['arm_a']['sensor']['pixel_size'])).to(u.um)*(1.0/u.pix)
             
