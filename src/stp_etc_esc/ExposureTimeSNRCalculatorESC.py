@@ -510,12 +510,14 @@ class Observatory:
     # NOTE: This function is "complete", meaning you would only need to add observational parameters
     # to make an observation ('set_source', 'set_background', and 'make_observation'). 
     def make_STP(self,subap = 'A',plot=False,telconfig='DEFAULT',escconfig='DEFAULT',telpath='DEFAULT',escpath='DEFAULT',contrast='spec'
+                 , sensor_area=None
                  # , left=4000 ,right=8000  # for plotting (units in angstroms)
                 ):
 
         #Inputs:
             #subap: 'A' or 'B': Which ESC subaperture to consider. If 'A', chooses the 2.43m aperture. If 'B', chooses the 1.3m aperture.
             #plot: conditional: make plots of the bandwidth when adding every optical component
+            #sensor_area: area Quantity: detector region passed to add_sensor, e.g. (256 * 3.76 * u.um)**2
         
         # Update observatory properties based on latest specifications
         #Reset bandpasses if running new instance of make_STP()
@@ -650,7 +652,7 @@ class Observatory:
         self.add_sensor(sensor_path.as_posix(), wave_unit='nm', num_curves=1
                        , gain_setting= self.instrument_config['common_params'][arm_key]['sensor']['gain'] # (0.1 dB)
                        , sensor_temp = self.instrument_config['common_params'][arm_key]['sensor']['temp_nominal']*u.Celsius
-                       , sensor_area = None
+                       , sensor_area = sensor_area
                        , sensor_pixel_size = None
                        , gain = None
                        , dark_current = None
