@@ -596,7 +596,8 @@ class Observatory:
         self.jitter_rms         = u.Quantity(self.telescope_config['observatory']['pointing']['jitter_rms'])
         self.resel              = np.pi*(((self.primary_filter)/2/self.diameter_primary*u.radian)**2).to(u.arcsec**2,equivalencies=u.dimensionless_angles()) #Size of a resolution element. Needed for SNR calculations
         self.ppgain             = 1./self.instrument_config['common_params']['ETC']['pp_gain'] #Helpful for SNR calculations later
-        
+        self.aper_rad = (0.7*self.primary_filter/self.diameter_primary*u.radian).to(u.arcsec,equivalencies=u.dimensionless_angles())
+        self.aper_area = np.pi*(self.aper_rad)**2
         
             
         # Add STP mirrors
@@ -665,6 +666,7 @@ class Observatory:
             
         # Calculate PSF
         self.calc_PSF(wavelength=None, approx_type='sq')
+        self.num_psf_pixels = (self.aper_area.value / self.plate_scale**2) * u.pix
 
     def save_nonCoronThruput(self,savedir='.',savepath='nonCoronThruput'):
         #####Save the noncoronagraphic throughput (all optics except FPM) as a .txt########
@@ -966,7 +968,7 @@ class Observatory:
                        )
         
         # Get countrate for observation
-        background_counts = bg_obs.countrate(area=self.surf_area)* u.electron/u.ct*self.resel/ u.arcsec**2 #Need to multiply by a resolution element
+        background_counts = bg_obs.countrate(area=self.surf_area)* u.electron/u.ct*self.aper_area/ u.arcsec**2 #Need to multiply by a resolution element
         self.sky_counts = background_counts
 
         #Exozodi background observation
@@ -997,7 +999,7 @@ class Observatory:
                        )
         
         # Get countrate for observation
-        exobackground_counts = bgexo_obs.countrate(area=self.surf_area)* u.electron/u.ct*self.resel/ u.arcsec**2 #Need to multiply by a resolution element
+        exobackground_counts = bgexo_obs.countrate(area=self.surf_area)* u.electron/u.ct*self.aper_area/ u.arcsec**2 #Need to multiply by a resolution element
         self.exozodi_counts = exobackground_counts
 
         #Calculate the speckle noise contribution
@@ -1037,7 +1039,7 @@ class Observatory:
             speckle_obs.plot(title='Speckle Noise'
                          , left=left, right=right
                        )
-        speckle_counts = speckle_obs.countrate(area=self.surf_area)* u.electron/u.ct
+        speckle_counts = speckle_obs.countrate(area=self.surf_area)* u.electron/u.ct * (self.aper_area/self.resel)
 
         self.speckle_counts = speckle_counts
 
