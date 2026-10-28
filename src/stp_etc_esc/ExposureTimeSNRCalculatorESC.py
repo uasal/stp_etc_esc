@@ -510,12 +510,14 @@ class Observatory:
     # NOTE: This function is "complete", meaning you would only need to add observational parameters
     # to make an observation ('set_source', 'set_background', and 'make_observation'). 
     def make_STP(self,subap = 'A',plot=False,telconfig='DEFAULT',escconfig='DEFAULT',telpath='DEFAULT',escpath='DEFAULT',contrast='spec'
+                 , sensor_area=None
                  # , left=4000 ,right=8000  # for plotting (units in angstroms)
                 ):
 
         #Inputs:
             #subap: 'A' or 'B': Which ESC subaperture to consider. If 'A', chooses the 2.43m aperture. If 'B', chooses the 1.3m aperture.
             #plot: conditional: make plots of the bandwidth when adding every optical component
+            #sensor_area: area Quantity: detector region passed to add_sensor, e.g. (256 * 3.76 * u.um)**2
         
         # Update observatory properties based on latest specifications
         #Reset bandpasses if running new instance of make_STP()
@@ -596,7 +598,8 @@ class Observatory:
         self.jitter_rms         = u.Quantity(self.telescope_config['observatory']['pointing']['jitter_rms'])
         self.resel              = np.pi*(((self.primary_filter)/2/self.diameter_primary*u.radian)**2).to(u.arcsec**2,equivalencies=u.dimensionless_angles()) #Size of a resolution element. Needed for SNR calculations
         self.ppgain             = 1./self.instrument_config['common_params']['ETC']['pp_gain'] #Helpful for SNR calculations later
-        
+        self.aper_rad = (0.7*self.primary_filter/self.diameter_primary*u.radian).to(u.arcsec,equivalencies=u.dimensionless_angles())
+        self.aper_area = np.pi*(self.aper_rad)**2
         
             
         # Add STP mirrors
@@ -649,7 +652,7 @@ class Observatory:
         self.add_sensor(sensor_path.as_posix(), wave_unit='nm', num_curves=1
                        , gain_setting= self.instrument_config['common_params'][arm_key]['sensor']['gain'] # (0.1 dB)
                        , sensor_temp = self.instrument_config['common_params'][arm_key]['sensor']['temp_nominal']*u.Celsius
-                       , sensor_area = None
+                       , sensor_area = sensor_area
                        , sensor_pixel_size = None
                        , gain = None
                        , dark_current = None
@@ -665,6 +668,7 @@ class Observatory:
             
         # Calculate PSF
         self.calc_PSF(wavelength=None, approx_type='sq')
+        self.num_psf_pixels = (self.aper_area.value / self.plate_scale**2) * u.pix
 
     def save_nonCoronThruput(self,savedir='.',savepath='nonCoronThruput'):
         #####Save the noncoronagraphic throughput (all optics except FPM) as a .txt########
@@ -966,7 +970,7 @@ class Observatory:
                        )
         
         # Get countrate for observation
-        background_counts = bg_obs.countrate(area=self.surf_area)* u.electron/u.ct*self.resel/ u.arcsec**2 #Need to multiply by a resolution element
+        background_counts = bg_obs.countrate(area=self.surf_area)* u.electron/u.ct*self.aper_area/ u.arcsec**2 #Need to multiply by a resolution element
         self.sky_counts = background_counts
 
         #Exozodi background observation
@@ -997,7 +1001,7 @@ class Observatory:
                        )
         
         # Get countrate for observation
-        exobackground_counts = bgexo_obs.countrate(area=self.surf_area)* u.electron/u.ct*self.resel/ u.arcsec**2 #Need to multiply by a resolution element
+        exobackground_counts = bgexo_obs.countrate(area=self.surf_area)* u.electron/u.ct*self.aper_area/ u.arcsec**2 #Need to multiply by a resolution element
         self.exozodi_counts = exobackground_counts
 
         #Calculate the speckle noise contribution
@@ -1037,7 +1041,7 @@ class Observatory:
             speckle_obs.plot(title='Speckle Noise'
                          , left=left, right=right
                        )
-        speckle_counts = speckle_obs.countrate(area=self.surf_area)* u.electron/u.ct
+        speckle_counts = speckle_obs.countrate(area=self.surf_area)* u.electron/u.ct * (self.aper_area/self.resel)
 
         self.speckle_counts = speckle_counts
 
